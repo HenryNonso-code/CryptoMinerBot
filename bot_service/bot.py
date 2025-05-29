@@ -1,120 +1,128 @@
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from datetime import datetime
-import random
+import os
+import requests
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
-from app.db import get_db, init_db
+# === Configuration ===
+BOT_TOKEN = os.environ.get("BOT_TOKEN")  # Read token securely from env
+API_URL = "https://cryptominerbot-1.onrender.com"
 
-app = FastAPI()
+# === Bot Commands ===
 
-# CORS setup
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = update.effective_user.first_name
+    message = (
+        f"👋 Welcome {name}!\n\n"
+        "Use the commands below:\n"
+        "/register - Create your account (optionally with a referral code)\n"
+        "/mine - Start mining ⛏️\n"
+        "/spin - Try your luck 🎰\n"
+        "/quest - Complete a quest 🎯\n"
+        "/balance - Check your wallet 💰\n"
+        "/refer - Invite friends 👥 and earn rewards!"
+    )
+    await update.message.reply_text(message)
 
-init_db()
+async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    referral_code = context.args[0] if context.args else None
 
-# === Pydantic Models ===
-class RegisterRequest(BaseModel):
-    telegram_id: str
-    referral_code: str | None = None
-
-
-# === Utility ===
-def get_or_create_user(db: Session, telegram_id: str, referral_code: str = None):
-    user = db.query(User).filter_by(telegram_id=telegram_id).first()
-    if not user:
-        user = User(
-            telegram_id=telegram_id,
-            referral_code=f"{telegram_id[-6:]}_{random.randint(1000, 9999)}",
-            referred_by=referral_code,
-            balance=0,
-            last_mined=None,
-            last_spun=None,
-            last_spin_reward=0,
-            referral_points=0,
+    try:
+        response = requests.post(
+            f"{API_URL}/register",
+            json={"telegram_id": telegram_id, "referral_code": referral_code}
         )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user
+        data = response.json()
+        msg = (
+            f"✅ Registered!\n"
+            f"🆔 ID: {data['id']}\n"
+            f"🔗 Referral Code: {data['referral_code']}\n"
+            f"💰 Balance: {data['balance']} coins\n"
+            f"{data.get('message', '')}"
+        )
+        await update.message.reply_text(msg)
+    except Exception as e:
+        print("❌ Register error:", e)
+        await update.message.reply_text("⚠️ Registration failed. Try again.")
 
+async def mine(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    try:
+        response = requests.post(f"{API_URL}/mine", params={"telegram_id": telegram_id})
+        data = response.json()
+        msg = data.get("message") or f"⛏️ You mined {data.get('amount')} coins!\nNew balance: {data.get('balance')}"
+        await update.message.reply_text(msg)
+    except Exception as e:
+        print("❌ Mine error:", e)
+        await update.message.reply_text("⚠️ Mining failed. Try again later.")
 
-# === Endpoints ===
-@app.post("/register")
-def register(payload: RegisterRequest, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, payload.telegram_id, payload.referral_code)
+async def spin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    try:
+        response = requests.post(f"{API_URL}/spin", params={"telegram_id": telegram_id})
+        data = response.json()
+        msg = f"🎰 Spin result: {data.get('amount')} coins\n💰 New balance: {data.get('balance')}"
+        await update.message.reply_text(msg)
+    except Exception as e:
+        print("❌ Spin error:", e)
+        await update.message.reply_text("⚠️ Could not spin right now.")
 
-    # Award referral if valid
-    if payload.referral_code and user.referred_by == payload.referral_code:
-        referrer = db.query(User).filter_by(referral_code=payload.referral_code).first()
-        if referrer and referrer.telegram_id != payload.telegram_id:
-            referrer.referral_points += 10
-            referrer.balance += 5
-            db.commit()
+async def quest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    try:
+        response = requests.post(f"{API_URL}/quest", params={"telegram_id": telegram_id})
+        data = response.json()
+        msg = f"🎯 Quest complete!\n🏆 Earned: {data.get('amount')} coins\n💰 New balance: {data.get('balance')}"
+        await update.message.reply_text(msg)
+    except Exception as e:
+        print("❌ Quest error:", e)
+        await update.message.reply_text("⚠️ Quest failed. Try again later.")
 
-    return {
-        "id": user.id,
-        "telegram_id": user.telegram_id,
-        "referral_code": user.referral_code,
-        "balance": round(user.balance, 2),
-        "message": "User registered successfully",
-    }
+async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    try:
+        response = requests.get(f"{API_URL}/balance", params={"telegram_id": telegram_id})
+        data = response.json()
+        msg = f"🏦 Your balance: {data.get('balance')} coins"
+        await update.message.reply_text(msg)
+    except Exception as e:
+        print("❌ Balance error:", e)
+        await update.message.reply_text("⚠️ Could not fetch balance.")
 
+async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    try:
+        response = requests.get(f"{API_URL}/balance", params={"telegram_id": telegram_id})
+        data = response.json()
+        code = data.get("referral_code")
+        referrals = data.get("referrals", 0)
+        if code:
+            bot_username = context.bot.username
+            link = f"https://t.me/{bot_username}?start={code}"
+            msg = f"📣 Invite others to join:\n🔗 {link}\n👥 Referrals: {referrals}"
+        else:
+            msg = "⚠️ Referral code not available. Try registering again."
+        await update.message.reply_text(msg)
+    except Exception as e:
+        print("❌ Refer error:", e)
+        await update.message.reply_text("⚠️ Could not fetch referral info.")
 
-@app.post("/mine")
-def mine(telegram_id: str, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, telegram_id)
-    now = datetime.utcnow()
+# === Debug echo ===
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"🟢 Received message: {update.message.text}")
 
-    if user.last_mined and (now - user.last_mined).seconds < 10:
-        raise HTTPException(status_code=429, detail="Mine cooldown in effect")
+# === Main Entrypoint ===
+if __name__ == "__main__":
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    amount = random.uniform(1, 10)
-    user.balance += amount
-    user.last_mined = now
-    db.commit()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("register", register))
+    app.add_handler(CommandHandler("mine", mine))
+    app.add_handler(CommandHandler("spin", spin))
+    app.add_handler(CommandHandler("quest", quest))
+    app.add_handler(CommandHandler("balance", balance))
+    app.add_handler(CommandHandler("refer", refer))
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
 
-    return {"amount": round(amount, 2), "balance": round(user.balance, 2)}
-
-
-@app.post("/spin")
-def spin(telegram_id: str, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, telegram_id)
-    now = datetime.utcnow()
-
-    if user.last_spun and (now - user.last_spun).seconds < 30:
-        raise HTTPException(status_code=429, detail="Spin cooldown in effect")
-
-    amount = random.uniform(0, 20)
-    user.balance += amount
-    user.last_spun = now
-    user.last_spin_reward = amount
-    db.commit()
-
-    return {"amount": round(amount, 2), "balance": round(user.balance, 2)}
-
-
-@app.post("/quest")
-def quest(telegram_id: str, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, telegram_id)
-    amount = random.uniform(3, 12)
-    user.balance += amount
-    db.commit()
-
-    return {"amount": round(amount, 2), "balance": round(user.balance, 2)}
-
-
-@app.get("/balance")
-def balance(telegram_id: str, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, telegram_id)
-    return {
-        "balance": round(user.balance, 2),
-        "referral_code": user.referral_code,
-        "referrals": user.referral_points,
-    }
+    print("✅ Telegram bot is running...")
+    app.run_polling()
