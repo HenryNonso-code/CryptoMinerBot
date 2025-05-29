@@ -5,7 +5,6 @@ from pydantic import BaseModel
 from datetime import datetime
 import random
 
-from app.models import User
 from app.db import get_db, init_db
 
 app = FastAPI()
