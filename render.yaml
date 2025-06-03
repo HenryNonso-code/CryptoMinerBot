@@ -1,9 +1,21 @@
 services:
   - type: web
-    name: crypto-api
+    name: crypto-miner-bot-web
     runtime: docker
     rootDir: .
     dockerfilePath: Dockerfile
     envVars:
       - key: PORT
-        value: 8000
+        value: 10000
+    envVarSources:
+      - environmentName: crypto-miner-bot-env
+        environmentSlug: crypto-miner-bot-env
+
+  - type: worker
+    name: crypto-miner-bot-worker
+    runtime: docker
+    rootDir: .
+    dockerfilePath: Dockerfile
+    envVarSources:
+      - environmentName: crypto-miner-bot-env
+        environmentSlug: crypto-miner-bot-env

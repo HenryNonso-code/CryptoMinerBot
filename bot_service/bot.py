@@ -4,8 +4,8 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 # === Configuration ===
-BOT_TOKEN = os.environ.get("BOT_TOKEN")  # Read token securely from env
-API_URL = "https://cryptominerbot-1.onrender.com"
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+API_URL = os.environ.get("BACKEND_URL", "https://cryptominerbot-1.onrender.com")
 
 # === Bot Commands ===
 
@@ -26,7 +26,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = str(update.effective_user.id)
     referral_code = context.args[0] if context.args else None
-
     try:
         response = requests.post(
             f"{API_URL}/register",
@@ -50,8 +49,13 @@ async def mine(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.post(f"{API_URL}/mine", params={"telegram_id": telegram_id})
         data = response.json()
-        msg = data.get("message") or f"⛏️ You mined {data.get('amount')} coins!\nNew balance: {data.get('balance')}"
-        await update.message.reply_text(msg)
+
+        # Correctly handle success/fail message based on backend logic
+        if data.get("success") is False:
+            await update.message.reply_text(data.get("message", "🛑 You can't mine now."))
+        else:
+            await update.message.reply_text(data.get("message", "✅ Mining complete."))
+
     except Exception as e:
         print("❌ Mine error:", e)
         await update.message.reply_text("⚠️ Mining failed. Try again later.")
@@ -113,6 +117,9 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # === Main Entrypoint ===
 if __name__ == "__main__":
+    if not BOT_TOKEN:
+        raise ValueError("❌ BOT_TOKEN environment variable not set!")
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
