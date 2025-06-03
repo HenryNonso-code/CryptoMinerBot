@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # FastAPI setup
 app = FastAPI()
 
-# Health check endpoint
+# Health check endpoint (isolated to ensure it always works)
 @app.get("/")
 @app.head("/")
 async def root():
@@ -26,106 +26,142 @@ async def root():
     return {"message": "CryptoMinerBot is running!"}
 
 # Database setup (SQLite with users.db)
-engine = create_engine("sqlite:///users.db", echo=True)
-Base = declarative_base()
+try:
+    engine = create_engine("sqlite:///users.db", echo=True)
+    Base = declarative_base()
 
-class User(Base):
-    __tablename__ = "users"
-    telegram_id = Column(String, primary_key=True)
-    balance = Column(Integer, default=0)
+    class User(Base):
+        __tablename__ = "users"
+        telegram_id = Column(String, primary_key=True)
+        balance = Column(Integer, default=0)
 
-Base.metadata.create_all(engine)
-Session = sessionmaker(bind=engine)
-session = Session()
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    logger.info("Database initialized successfully")
+except Exception as e:
+    logger.error(f"Database initialization failed: {e}")
 
 # Telegram bot setup
 token = os.getenv("TELEGRAM_TOKEN")
-if not token:
+telegram_app = None
+if token:
+    try:
+        telegram_app = Application.builder().token(token).build()
+        logger.info("Telegram bot initialized successfully")
+    except Exception as e:
+        logger.error(f"Telegram bot initialization failed: {e}")
+else:
     logger.error("TELEGRAM_TOKEN environment variable not set")
-    raise ValueError("TELEGRAM_TOKEN environment variable not set")
-
-telegram_app = Application.builder().token(token).build()
 
 # Command handlers
 async def start(update, context):
     user_id = str(update.message.from_user.id)
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        user = User(telegram_id=user_id, balance=0)
-        session.add(user)
-        session.commit()
-        logger.info(f"New user registered: {user_id}")
-    
-    # Create a button to launch the mini-app
-    keyboard = [[InlineKeyboardButton("Open Mining Dashboard", web_app={"url": "https://your-render-url/miniapp"})]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Welcome to CryptoMinerBot! Open your mining dashboard below:", reply_markup=reply_markup)
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            user = User(telegram_id=user_id, balance=0)
+            session.add(user)
+            session.commit()
+            logger.info(f"New user registered: {user_id}")
+        
+        # Create a button to launch the mini-app
+        keyboard = [[InlineKeyboardButton("Open Mining Dashboard", web_app={"url": "https://crypto-miner-bot-web.onrender.com/miniapp"})]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("Welcome to CryptoMinerBot! Open your mining dashboard below:", reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"Error in /start command: {e}")
+        await update.message.reply_text("An error occurred. Please try again later.")
 
 async def mine(update, context):
     user_id = str(update.message.from_user.id)
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        await update.message.reply_text("Please use /start first!")
-        return
-    user.balance += 10  # Simulate mining by adding 10 points
-    session.commit()
-    logger.info(f"User {user_id} mined 10 points. New balance: {user.balance}")
-    await update.message.reply_text(f"Mining successful! Your balance: {user.balance} coins.")
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            await update.message.reply_text("Please use /start first!")
+            return
+        user.balance += 10
+        session.commit()
+        logger.info(f"User {user_id} mined 10 points. New balance: {user.balance}")
+        await update.message.reply_text(f"Mining successful! Your balance: {user.balance} coins.")
+    except Exception as e:
+        logger.error(f"Error in /mine command: {e}")
+        await update.message.reply_text("An error occurred. Please try again later.")
 
 async def balance(update, context):
     user_id = str(update.message.from_user.id)
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        await update.message.reply_text("Please use /start first!")
-        return
-    await update.message.reply_text(f"Your balance: {user.balance} coins.")
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            await update.message.reply_text("Please use /start first!")
+            return
+        await update.message.reply_text(f"Your balance: {user.balance} coins.")
+    except Exception as e:
+        logger.error(f"Error in /balance command: {e}")
+        await update.message.reply_text("An error occurred. Please try again later.")
 
 async def spin(update, context):
     user_id = str(update.message.from_user.id)
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        await update.message.reply_text("Please use /start first!")
-        return
-    spin_result = random.uniform(1, 10)  # Random spin result between 1 and 10
-    user.balance += int(spin_result)
-    session.commit()
-    logger.info(f"User {user_id} spun and earned {spin_result:.1f} coins. New balance: {user.balance}")
-    await update.message.reply_text(f"Spin result: {spin_result:.1f} coins\nNew balance: {user.balance} coins.")
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            await update.message.reply_text("Please use /start first!")
+            return
+        spin_result = random.uniform(1, 10)
+        user.balance += int(spin_result)
+        session.commit()
+        logger.info(f"User {user_id} spun and earned {spin_result:.1f} coins. New balance: {user.balance}")
+        await update.message.reply_text(f"Spin result: {spin_result:.1f} coins\nNew balance: {user.balance} coins.")
+    except Exception as e:
+        logger.error(f"Error in /spin command: {e}")
+        await update.message.reply_text("An error occurred. Please try again later.")
 
 async def quest(update, context):
     user_id = str(update.message.from_user.id)
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        await update.message.reply_text("Please use /start first!")
-        return
-    quest_reward = random.randint(5, 15)  # Random quest reward between 5 and 15
-    user.balance += quest_reward
-    session.commit()
-    logger.info(f"User {user_id} completed a quest and earned {quest_reward} coins. New balance: {user.balance}")
-    await update.message.reply_text(f"Quest completed!\nEarned: {quest_reward} coins\nNew balance: {user.balance} coins.")
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            await update.message.reply_text("Please use /start first!")
+            return
+        quest_reward = random.randint(5, 15)
+        user.balance += quest_reward
+        session.commit()
+        logger.info(f"User {user_id} completed a quest and earned {quest_reward} coins. New balance: {user.balance}")
+        await update.message.reply_text(f"Quest completed!\nEarned: {quest_reward} coins\nNew balance: {user.balance} coins.")
+    except Exception as e:
+        logger.error(f"Error in /quest command: {e}")
+        await update.message.reply_text("An error occurred. Please try again later.")
 
-# API endpoint for the mini-app to fetch user data
+# API endpoints for the mini-app
 @app.get("/api/user/{telegram_id}")
 async def get_user(telegram_id: str):
-    user = session.query(User).filter_by(telegram_id=telegram_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"balance": user.balance}
+    try:
+        user = session.query(User).filter_by(telegram_id=telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"balance": user.balance}
+    except Exception as e:
+        logger.error(f"Error in /api/user/{telegram_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-# API endpoint for mining via the mini-app
 @app.get("/api/mine/{telegram_id}")
 async def api_mine(telegram_id: str):
-    user = session.query(User).filter_by(telegram_id=telegram_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user.balance += 10
-    session.commit()
-    logger.info(f"User {telegram_id} mined 10 points via API. New balance: {user.balance}")
-    return {"balance": user.balance}
+    try:
+        user = session.query(User).filter_by(telegram_id=telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user.balance += 10
+        session.commit()
+        logger.info(f"User {telegram_id} mined 10 points via API. New balance: {user.balance}")
+        return {"balance": user.balance}
+    except Exception as e:
+        logger.error(f"Error in /api/mine/{telegram_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # Serve the mini-app HTML
 @app.get("/miniapp")
 async def miniapp():
+    logger.info("Serving mini-app HTML")
     html_content = """
     <!DOCTYPE html>
     <html lang="en">
@@ -208,7 +244,7 @@ async def miniapp():
         <script>
             let balance = 0;
             let multiplier = 1;
-            let timer = 3600; // 1 hour in seconds
+            let timer = 3600;
 
             function updateBalance(newBalance) {
                 balance = newBalance;
@@ -253,10 +289,8 @@ async def miniapp():
                 } else if (tab === 'wallet') {
                     document.getElementById('content').innerHTML += `<p>Your balance: ${balance.toLocaleString()} coins</p>`;
                 }
-                // Add more tab content as needed
             }
 
-            // Initialize Telegram Web App
             Telegram.WebApp.ready();
             const userId = Telegram.WebApp.initDataUnsafe.user.id;
             fetch(`/api/user/${userId}`)
@@ -277,19 +311,22 @@ async def miniapp():
     """
     return HTMLResponse(content=html_content)
 
-# Register command handlers
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(CommandHandler("mine", mine))
-telegram_app.add_handler(CommandHandler("balance", balance))
-telegram_app.add_handler(CommandHandler("spin", spin))
-telegram_app.add_handler(CommandHandler("quest", quest))
+# Register command handlers if Telegram bot is initialized
+if telegram_app:
+    telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("mine", mine))
+    telegram_app.add_handler(CommandHandler("balance", balance))
+    telegram_app.add_handler(CommandHandler("spin", spin))
+    telegram_app.add_handler(CommandHandler("quest", quest))
 
-# Run Telegram bot in a separate thread
-def run_telegram_bot():
-    logger.info("Starting Telegram bot polling")
-    telegram_app.run_polling()
+    # Run Telegram bot in a separate thread
+    def run_telegram_bot():
+        logger.info("Starting Telegram bot polling")
+        telegram_app.run_polling()
 
-threading.Thread(target=run_telegram_bot, daemon=True).start()
+    threading.Thread(target=run_telegram_bot, daemon=True).start()
+else:
+    logger.warning("Telegram bot not initialized; skipping polling")
 
 # Run FastAPI server
 if __name__ == "__main__":

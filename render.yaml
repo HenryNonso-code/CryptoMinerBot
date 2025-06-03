@@ -18,4 +18,4 @@ services:
     dockerfilePath: Dockerfile
     envVarSources:
       - environmentName: crypto-miner-bot-env
-        environmentSlug: crypto-miner-bot-env
+        environmentSlug: environment
