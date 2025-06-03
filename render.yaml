@@ -7,15 +7,5 @@ services:
     envVars:
       - key: PORT
         value: 10000
-    envVarSources:
-      - environmentName: crypto-miner-bot-env
-        environmentSlug: crypto-miner-bot-env
-
-  - type: worker
-    name: crypto-miner-bot-worker
-    runtime: docker
-    rootDir: .
-    dockerfilePath: Dockerfile
-    envVarSources:
-      - environmentName: crypto-miner-bot-env
-        environmentSlug: environment
+      - key: TELEGRAM_TOKEN
+        sync: false

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # FastAPI setup
 app = FastAPI()
 
-# Health check endpoint (isolated to ensure it always works)
+# Health check endpoint
 @app.get("/")
 @app.head("/")
 async def root():
@@ -65,7 +65,6 @@ async def start(update, context):
             session.commit()
             logger.info(f"New user registered: {user_id}")
         
-        # Create a button to launch the mini-app
         keyboard = [[InlineKeyboardButton("Open Mining Dashboard", web_app={"url": "https://crypto-miner-bot-web.onrender.com/miniapp"})]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text("Welcome to CryptoMinerBot! Open your mining dashboard below:", reply_markup=reply_markup)

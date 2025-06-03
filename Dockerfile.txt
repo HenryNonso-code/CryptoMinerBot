@@ -2,9 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Copy all code
 COPY bot_service/app /app
-COPY users.db /app
+COPY bot_service/requirements.txt /app/requirements.txt
 
-RUN pip install -r requirements.txt
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["python", "main.py"]
+# Expose the default Render port
+EXPOSE 10000
+
+# Start FastAPI using uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
