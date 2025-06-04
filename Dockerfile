@@ -2,14 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# ✅ Copy ONLY the requirements.txt file FIRST
-COPY bot_service/requirements.txt .
+# ✅ Copy the requirements.txt from bot_service directory explicitly
+COPY bot_service/requirements.txt /app/requirements.txt
 
-# ✅ Install dependencies before copying rest
+# ✅ Install dependencies
 RUN pip install -r requirements.txt
 
-# ✅ Now copy your full codebase
+# ✅ Now copy the entire bot_service app code into /app
 COPY bot_service/ .
 
-# ✅ Run your FastAPI + Telegram hybrid bot
+# ✅ Run the main FastAPI app
 CMD ["python", "main.py"]
