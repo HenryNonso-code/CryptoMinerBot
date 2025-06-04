@@ -2,16 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy requirements.txt FIRST so it gets cached
-COPY bot_service/requirements.txt /app/requirements.txt
+# ✅ Correct path to the actual file inside your repo
+COPY bot_service/requirements.txt .
 
-# Then install dependencies
+# ✅ Install dependencies properly
 RUN pip install -r requirements.txt
 
-# Copy all source code (main.py, bot.py, etc.)
-COPY bot_service/app /app/app
-COPY bot_service/bot.py /app/bot.py
-COPY bot_service/main.py /app/main.py
-COPY bot_service/users.db /app/users.db
+# ✅ Copy the rest of your app (main.py, bot.py, etc.)
+COPY bot_service/ .
 
+# ✅ Run the FastAPI + Telegram bot hybrid script
 CMD ["python", "main.py"]
