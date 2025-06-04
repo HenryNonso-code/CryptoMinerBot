@@ -1,15 +1,13 @@
 FROM python:3.11-slim
 
+# Set working directory
 WORKDIR /app
 
-# ✅ Copy the requirements.txt from bot_service directory explicitly
-COPY bot_service/requirements.txt /app/requirements.txt
+# Copy everything into /app (this includes main.py and requirements.txt)
+COPY bot_service/ /app/
 
-# ✅ Install dependencies
-RUN pip install -r requirements.txt
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# ✅ Now copy the entire bot_service app code into /app
-COPY bot_service/ .
-
-# ✅ Run the main FastAPI app
+# Run the FastAPI app
 CMD ["python", "main.py"]
