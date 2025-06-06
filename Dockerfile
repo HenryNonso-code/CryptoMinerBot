@@ -2,12 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy and install dependencies
-COPY bot_service/requirements.txt ./requirements.txt
+# Copy everything in the repo (which includes requirements.txt and main.py)
+COPY . .
+
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy entire bot_service project into container
-COPY bot_service/ ./bot_service
-
-# ✅ Correct path to run main.py
-CMD ["python", "bot_service/main.py"]
+# Run the app
+CMD ["python", "main.py"]
