@@ -2,11 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy everything in the repo (which includes requirements.txt and main.py)
+# Copy everything
 COPY . .
 
 # Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r bot_service/requirements.txt
 
-# Run the app
-CMD ["python", "main.py"]
+# Run FastAPI app
+CMD ["python", "bot_service/main.py"]
