@@ -2,14 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy requirements from bot_service folder
+# Copy and install dependencies
 COPY bot_service/requirements.txt ./requirements.txt
-
-# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy full code
-COPY bot_service/ .
+# Copy entire bot_service project into container
+COPY bot_service/ ./bot_service
 
-# ✅ Run FastAPI app
-CMD ["python", "./main.py"]
+# ✅ Correct path to run main.py
+CMD ["python", "bot_service/main.py"]
