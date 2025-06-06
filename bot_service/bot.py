@@ -34,9 +34,9 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = response.json()
         msg = (
             f"✅ Registered!\n"
-            f"🆔 ID: {data['id']}\n"
-            f"🔗 Referral Code: {data['referral_code']}\n"
-            f"💰 Balance: {data['balance']} coins\n"
+            f"🆔 ID: {data.get('id')}\n"
+            f"🔗 Referral Code: {data.get('referral_code')}\n"
+            f"💰 Balance: {data.get('balance')} coins\n"
             f"{data.get('message', '')}"
         )
         await update.message.reply_text(msg)
@@ -49,13 +49,10 @@ async def mine(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.post(f"{API_URL}/mine", params={"telegram_id": telegram_id})
         data = response.json()
-
-        # Correctly handle success/fail message based on backend logic
-        if data.get("success") is False:
-            await update.message.reply_text(data.get("message", "🛑 You can't mine now."))
-        else:
-            await update.message.reply_text(data.get("message", "✅ Mining complete."))
-
+        coins = data.get("coins", 0)
+        balance = data.get("balance", 0)
+        message = data.get("message", f"⛏️ You mined {coins} coins!\n💰 New balance: {balance}")
+        await update.message.reply_text(message)
     except Exception as e:
         print("❌ Mine error:", e)
         await update.message.reply_text("⚠️ Mining failed. Try again later.")
@@ -65,7 +62,9 @@ async def spin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.post(f"{API_URL}/spin", params={"telegram_id": telegram_id})
         data = response.json()
-        msg = f"🎰 Spin result: {data.get('amount')} coins\n💰 New balance: {data.get('balance')}"
+        coins = data.get("amount", 0)
+        balance = data.get("balance", 0)
+        msg = f"🎰 Spin result: {coins} coins\n💰 New balance: {balance}"
         await update.message.reply_text(msg)
     except Exception as e:
         print("❌ Spin error:", e)
@@ -76,7 +75,9 @@ async def quest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.post(f"{API_URL}/quest", params={"telegram_id": telegram_id})
         data = response.json()
-        msg = f"🎯 Quest complete!\n🏆 Earned: {data.get('amount')} coins\n💰 New balance: {data.get('balance')}"
+        coins = data.get("amount", 0)
+        balance = data.get("balance", 0)
+        msg = f"🎯 Quest complete!\n🏆 Earned: {coins} coins\n💰 New balance: {balance}"
         await update.message.reply_text(msg)
     except Exception as e:
         print("❌ Quest error:", e)
@@ -87,7 +88,7 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.get(f"{API_URL}/balance", params={"telegram_id": telegram_id})
         data = response.json()
-        msg = f"🏦 Your balance: {data.get('balance')} coins"
+        msg = f"🏦 Your balance: {data.get('balance', 0)} coins"
         await update.message.reply_text(msg)
     except Exception as e:
         print("❌ Balance error:", e)
