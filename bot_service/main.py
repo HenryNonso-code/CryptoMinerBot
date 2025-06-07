@@ -67,6 +67,21 @@ async def start(update, context):
         logger.error(f"Error in /start: {e}")
         await update.message.reply_text("An error occurred. Try again later.")
 
+async def register(update, context):
+    user_id = str(update.message.from_user.id)
+    try:
+        existing = session.query(User).filter_by(telegram_id=user_id).first()
+        if not existing:
+            user = User(telegram_id=user_id, balance=0)
+            session.add(user)
+            session.commit()
+            await update.message.reply_text(f"✅ Registered!\nID: {user_id}\nBalance: 0 coins.")
+        else:
+            await update.message.reply_text("ℹ️ You're already registered.")
+    except Exception as e:
+        logger.error(f"Telegram /register error: {e}")
+        await update.message.reply_text("⚠️ Could not register.")
+
 async def mine(update, context):
     user_id = str(update.message.from_user.id)
     try:
@@ -149,6 +164,21 @@ class WalletLinkRequest(BaseModel):
     telegram_id: str
     wallet_address: str
 
+@app.post("/register")
+def register_user(data: WalletLinkRequest):
+    try:
+        user = session.query(User).filter_by(telegram_id=data.telegram_id).first()
+        if not user:
+            user = User(telegram_id=data.telegram_id, balance=0)
+            session.add(user)
+            session.commit()
+            return {"message": "✅ User registered", "telegram_id": data.telegram_id, "balance": user.balance}
+        else:
+            return {"message": "ℹ️ User already registered", "telegram_id": user.telegram_id, "balance": user.balance}
+    except Exception as e:
+        logger.error(f"Register error: {e}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
 @app.post("/link-wallet")
 def link_wallet(data: WalletLinkRequest):
     try:
@@ -168,12 +198,15 @@ def miniapp():
 
 if telegram_app:
     telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("register", register))
     telegram_app.add_handler(CommandHandler("mine", mine))
     telegram_app.add_handler(CommandHandler("balance", balance))
     telegram_app.add_handler(CommandHandler("spin", spin))
     telegram_app.add_handler(CommandHandler("quest", quest))
 
     def run_bot():
+        import asyncio
+        asyncio.set_event_loop(asyncio.new_event_loop())
         telegram_app.run_polling()
 
     threading.Thread(target=run_bot, daemon=True).start()
