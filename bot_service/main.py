@@ -31,7 +31,7 @@ class User(Base):
     __tablename__ = "users"
     telegram_id = Column(String, primary_key=True)
     balance = Column(Integer, default=0)
-    wallet_address = Column(String, nullable=True)  # 👈 Added this
+    wallet_address = Column(String, nullable=True)
 
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
@@ -145,7 +145,6 @@ def api_mine(telegram_id: str):
     session.commit()
     return {"balance": user.balance}
 
-# ✅ NEW: /link-wallet route
 class WalletLinkRequest(BaseModel):
     telegram_id: str
     wallet_address: str
@@ -163,12 +162,10 @@ def link_wallet(data: WalletLinkRequest):
         logger.error(f"Link wallet error: {e}")
         raise HTTPException(status_code=500, detail="Internal error")
 
-# === MiniApp Landing Page ===
 @app.get("/miniapp")
 def miniapp():
     return HTMLResponse("<h1>✅ CryptoMinerBot MiniApp Connected</h1>")
 
-# === Start Bot Polling ===
 if telegram_app:
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("mine", mine))
@@ -183,7 +180,6 @@ if telegram_app:
 else:
     logger.warning("Telegram bot not started.")
 
-# === Run FastAPI ===
 if __name__ == "__main__":
     logger.info("Starting server on http://0.0.0.0:10000")
     uvicorn.run(app, host="0.0.0.0", port=10000)
