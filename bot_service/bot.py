@@ -1,7 +1,13 @@
 import os
 import requests
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram import Update, KeyboardButton, WebAppInfo, ReplyKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters
+)
 
 # === Configuration ===
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -11,6 +17,11 @@ API_URL = os.environ.get("BACKEND_URL", "https://cryptominerbot-1.onrender.com")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.effective_user.first_name
+    keyboard = [
+        [KeyboardButton("🚀 Open JOHEC App", web_app=WebAppInfo(url="https://cryptominer-ui-two.vercel.app"))]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
     message = (
         f"👋 Welcome {name}!\n\n"
         "Use the commands below:\n"
@@ -19,9 +30,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/spin - Try your luck 🎰\n"
         "/quest - Complete a quest 🎯\n"
         "/balance - Check your wallet 💰\n"
-        "/refer - Invite friends 👥 and earn rewards!"
+        "/refer - Invite friends 👥 and earn rewards!\n\n"
+        "👇 Tap below to open the dashboard:"
     )
-    await update.message.reply_text(message)
+    await update.message.reply_text(message, reply_markup=reply_markup)
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = str(update.effective_user.id)
