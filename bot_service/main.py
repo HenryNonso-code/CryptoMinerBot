@@ -5,7 +5,7 @@ import threading
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -20,10 +20,6 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 # === DB Setup ===
-# Delete old DB to apply schema changes (TEMPORARY)
-if os.path.exists("users.db"):
-    os.remove("users.db")
-
 engine = create_engine("sqlite:///users.db", echo=True)
 Base = declarative_base()
 
@@ -64,7 +60,7 @@ async def start(update, context):
         markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text("Welcome to CryptoMinerBot! Open your mining dashboard below:", reply_markup=markup)
     except Exception as e:
-        logger.error(f"Error in /start: {e}")
+        logger.exception("Error in /start")
         await update.message.reply_text("An error occurred. Try again later.")
 
 async def register(update, context):
@@ -79,7 +75,7 @@ async def register(update, context):
         else:
             await update.message.reply_text("ℹ️ You're already registered.")
     except Exception as e:
-        logger.error(f"Telegram /register error: {e}")
+        logger.exception("Telegram /register error")
         await update.message.reply_text("⚠️ Could not register.")
 
 async def mine(update, context):
@@ -93,7 +89,7 @@ async def mine(update, context):
         session.commit()
         await update.message.reply_text(f"✅ You mined 10 coins!\nNew balance: {user.balance}")
     except Exception as e:
-        logger.error(f"Mine error: {e}")
+        logger.exception("Mine error")
         await update.message.reply_text("An error occurred.")
 
 async def balance(update, context):
@@ -105,7 +101,7 @@ async def balance(update, context):
             return
         await update.message.reply_text(f"💰 Your balance: {user.balance}")
     except Exception as e:
-        logger.error(f"Balance error: {e}")
+        logger.exception("Balance error")
         await update.message.reply_text("Could not fetch balance.")
 
 async def spin(update, context):
@@ -120,7 +116,7 @@ async def spin(update, context):
         session.commit()
         await update.message.reply_text(f"🎰 Spin result: {win}\nNew balance: {user.balance}")
     except Exception as e:
-        logger.error(f"Spin error: {e}")
+        logger.exception("Spin error")
         await update.message.reply_text("Could not spin.")
 
 async def quest(update, context):
@@ -135,7 +131,7 @@ async def quest(update, context):
         session.commit()
         await update.message.reply_text(f"🎯 Quest complete!\nEarned: {reward}\nBalance: {user.balance}")
     except Exception as e:
-        logger.error(f"Quest error: {e}")
+        logger.exception("Quest error")
         await update.message.reply_text("Error during quest.")
 
 # === Mini-App API Endpoints ===
@@ -164,6 +160,12 @@ class WalletLinkRequest(BaseModel):
     telegram_id: str
     wallet_address: str
 
+    @validator("telegram_id", "wallet_address")
+    def not_empty(cls, v):
+        if not v.strip():
+            raise ValueError("Must not be empty")
+        return v
+
 @app.post("/register")
 def register_user(data: WalletLinkRequest):
     try:
@@ -176,7 +178,7 @@ def register_user(data: WalletLinkRequest):
         else:
             return {"message": "ℹ️ User already registered", "telegram_id": user.telegram_id, "balance": user.balance}
     except Exception as e:
-        logger.error(f"Register error: {e}")
+        logger.exception("Register error")
         raise HTTPException(status_code=500, detail="Registration failed")
 
 @app.post("/link-wallet")
@@ -189,7 +191,7 @@ def link_wallet(data: WalletLinkRequest):
         session.commit()
         return {"message": "✅ Wallet linked successfully", "wallet_address": user.wallet_address}
     except Exception as e:
-        logger.error(f"Link wallet error: {e}")
+        logger.exception("Link wallet error")
         raise HTTPException(status_code=500, detail="Internal error")
 
 @app.get("/miniapp")
