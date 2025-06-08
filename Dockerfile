@@ -1,15 +1,22 @@
+# Dockerfile
+
+# Use slim Python 3.11 base image
 FROM python:3.11-slim
 
+# Set working directory inside the container
 WORKDIR /app
 
-# Copy everything into /app
-COPY . .
+# Install system dependencies (optional but helpful)
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install requirements from the correct path
-RUN pip install --no-cache-dir -r bot_service/requirements.txt
+# Copy requirements and install dependencies
+COPY bot_service/requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Move into the bot_service folder
-WORKDIR /app/bot_service
+# Copy all source code
+COPY bot_service/ ./bot_service
 
-# Run the main app
-CMD ["python", "main.py"]
+# Run the FastAPI app (main.py)
+CMD ["python", "bot_service/main.py"]
