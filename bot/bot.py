@@ -13,45 +13,42 @@ from telegram.ext import (
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 API_URL = os.environ.get("BACKEND_URL", "https://cryptominerbot-1.onrender.com")
 
-# === Bot Commands ===
+# === Commands ===
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    name = update.effective_user.first_name
+    name = update.effective_user.first_name or "Miner"
     keyboard = [
         [KeyboardButton("🚀 Open JOHEC App", web_app=WebAppInfo(url="https://cryptominer-ui-two.vercel.app"))]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
-    message = (
-        f"👋 Welcome {name}!\n\n"
-        "Use the commands below:\n"
-        "/register - Create your account (optionally with a referral code)\n"
-        "/mine - Start mining ⛏️\n"
-        "/spin - Try your luck 🎰\n"
+    msg = (
+        f"👋 Hello {name}!\n\n"
+        "Welcome to JOHEC CryptoMinerBot.\n\n"
+        "💡 Use these commands:\n"
+        "/register - Register an account (use a referral code if you have one)\n"
+        "/mine - Mine coins ⛏️\n"
+        "/spin - Spin the wheel 🎰\n"
         "/quest - Complete a quest 🎯\n"
-        "/balance - Check your wallet 💰\n"
-        "/refer - Invite friends 👥 and earn rewards!\n\n"
-        "👇 Tap below to open the dashboard:"
+        "/balance - Check your balance 💰\n"
+        "/refer - Get your referral link 👥\n\n"
+        "👇 Or tap below to access the dashboard."
     )
-    await update.message.reply_text(message, reply_markup=reply_markup)
+    await update.message.reply_text(msg, reply_markup=reply_markup)
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = str(update.effective_user.id)
+    username = update.effective_user.username or "Miner"
     referral_code = context.args[0] if context.args else None
     try:
-        response = requests.post(
-            f"{API_URL}/register",
-            json={"telegram_id": telegram_id, "referral_code": referral_code}
-        )
+        response = requests.post(f"{API_URL}/register", json={
+            "telegram_id": telegram_id,
+            "username": username,
+            "referral_code": referral_code
+        })
         data = response.json()
-        msg = (
-            f"✅ Registered!\n"
-            f"🆔 ID: {data.get('id')}\n"
-            f"🔗 Referral Code: {data.get('referral_code')}\n"
-            f"💰 Balance: {data.get('balance')} coins\n"
-            f"{data.get('message', '')}"
+        await update.message.reply_text(
+            f"✅ {data.get('message')}\n🆔 ID: {telegram_id}\n🔗 Referral Code: {data.get('referral_code')}\n💰 Balance: {data.get('balance')}"
         )
-        await update.message.reply_text(msg)
     except Exception as e:
         print("❌ Register error:", e)
         await update.message.reply_text("⚠️ Registration failed. Try again.")
@@ -61,10 +58,7 @@ async def mine(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.post(f"{API_URL}/mine", params={"telegram_id": telegram_id})
         data = response.json()
-        coins = data.get("coins", 0)
-        balance = data.get("balance", 0)
-        message = data.get("message", f"⛏️ You mined {coins} coins!\n💰 New balance: {balance}")
-        await update.message.reply_text(message)
+        await update.message.reply_text(data.get("message"))
     except Exception as e:
         print("❌ Mine error:", e)
         await update.message.reply_text("⚠️ Mining failed. Try again later.")
@@ -74,10 +68,7 @@ async def spin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.post(f"{API_URL}/spin", params={"telegram_id": telegram_id})
         data = response.json()
-        coins = data.get("amount", 0)
-        balance = data.get("balance", 0)
-        msg = f"🎰 Spin result: {coins} coins\n💰 New balance: {balance}"
-        await update.message.reply_text(msg)
+        await update.message.reply_text(data.get("message"))
     except Exception as e:
         print("❌ Spin error:", e)
         await update.message.reply_text("⚠️ Could not spin right now.")
@@ -87,10 +78,7 @@ async def quest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.post(f"{API_URL}/quest", params={"telegram_id": telegram_id})
         data = response.json()
-        coins = data.get("amount", 0)
-        balance = data.get("balance", 0)
-        msg = f"🎯 Quest complete!\n🏆 Earned: {coins} coins\n💰 New balance: {balance}"
-        await update.message.reply_text(msg)
+        await update.message.reply_text(data.get("message"))
     except Exception as e:
         print("❌ Quest error:", e)
         await update.message.reply_text("⚠️ Quest failed. Try again later.")
@@ -100,8 +88,7 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.get(f"{API_URL}/balance", params={"telegram_id": telegram_id})
         data = response.json()
-        msg = f"🏦 Your balance: {data.get('balance', 0)} coins"
-        await update.message.reply_text(msg)
+        await update.message.reply_text(f"🏦 Balance: {data.get('balance', 0)} coins")
     except Exception as e:
         print("❌ Balance error:", e)
         await update.message.reply_text("⚠️ Could not fetch balance.")
@@ -112,26 +99,24 @@ async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = requests.get(f"{API_URL}/balance", params={"telegram_id": telegram_id})
         data = response.json()
         code = data.get("referral_code")
-        referrals = data.get("referrals", 0)
         if code:
             bot_username = context.bot.username
-            link = f"https://t.me/{bot_username}?start={code}"
-            msg = f"📣 Invite others to join:\n🔗 {link}\n👥 Referrals: {referrals}"
+            referral_link = f"https://t.me/{bot_username}?start={code}"
+            await update.message.reply_text(f"📣 Invite your friends:\n🔗 {referral_link}")
         else:
-            msg = "⚠️ Referral code not available. Try registering again."
-        await update.message.reply_text(msg)
+            await update.message.reply_text("❌ No referral code available.")
     except Exception as e:
         print("❌ Refer error:", e)
-        await update.message.reply_text("⚠️ Could not fetch referral info.")
+        await update.message.reply_text("⚠️ Could not fetch referral code.")
 
-# === Debug echo ===
+# === Debug Echo ===
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"🟢 Received message: {update.message.text}")
+    print(f"🟢 Message: {update.message.text}")
 
-# === Main Entrypoint ===
+# === Entrypoint ===
 if __name__ == "__main__":
     if not BOT_TOKEN:
-        raise ValueError("❌ BOT_TOKEN environment variable not set!")
+        raise ValueError("❌ BOT_TOKEN environment variable is missing")
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -142,7 +127,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("quest", quest))
     app.add_handler(CommandHandler("balance", balance))
     app.add_handler(CommandHandler("refer", refer))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
     print("✅ Telegram bot is running...")
     app.run_polling()
