@@ -1,21 +1,17 @@
-# Dockerfile
-
+# Use a minimal Python image
 FROM python:3.11-slim
 
+# Set working directory
 WORKDIR /app
 
-# System dependencies (optional)
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-
-# Copy requirement file and install Python packages
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy all project files
+# Copy all files to the container
 COPY . .
 
-# Expose port for FastAPI
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Expose FastAPI port
 EXPOSE 10000
 
-# Start FastAPI + Telegram bot
-CMD ["python", "main.py"]
+# Start the FastAPI + Telegram app from app/main.py
+CMD ["python", "app/main.py"]
