@@ -3,12 +3,12 @@ import os
 import random
 import threading
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, validator
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler
 
@@ -30,8 +30,7 @@ class User(Base):
     wallet_address = Column(String, nullable=True)
 
 Base.metadata.create_all(engine)
-Session = sessionmaker(bind=engine)
-session = Session()
+SessionLocal = sessionmaker(bind=engine)
 
 # === Telegram Bot Setup ===
 token = os.getenv("TELEGRAM_TOKEN")
@@ -49,12 +48,13 @@ else:
 # === Telegram Command Handlers ===
 async def start(update, context):
     user_id = str(update.message.from_user.id)
+    db = SessionLocal()
     try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
+        user = db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             user = User(telegram_id=user_id, balance=0)
-            session.add(user)
-            session.commit()
+            db.add(user)
+            db.commit()
             logger.info(f"New user registered: {user_id}")
         keyboard = [[InlineKeyboardButton("Open Mining Dashboard", web_app={"url": "https://crypto-miner-bot-web.onrender.com/miniapp"})]]
         markup = InlineKeyboardMarkup(keyboard)
@@ -62,40 +62,49 @@ async def start(update, context):
     except Exception as e:
         logger.exception("Error in /start")
         await update.message.reply_text("An error occurred. Try again later.")
+    finally:
+        db.close()
 
 async def register(update, context):
     user_id = str(update.message.from_user.id)
+    db = SessionLocal()
     try:
-        existing = session.query(User).filter_by(telegram_id=user_id).first()
+        existing = db.query(User).filter_by(telegram_id=user_id).first()
         if not existing:
             user = User(telegram_id=user_id, balance=0)
-            session.add(user)
-            session.commit()
+            db.add(user)
+            db.commit()
             await update.message.reply_text(f"✅ Registered!\nID: {user_id}\nBalance: 0 coins.")
         else:
             await update.message.reply_text("ℹ️ You're already registered.")
     except Exception as e:
         logger.exception("Telegram /register error")
         await update.message.reply_text("⚠️ Could not register.")
+    finally:
+        db.close()
 
 async def mine(update, context):
     user_id = str(update.message.from_user.id)
+    db = SessionLocal()
     try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
+        user = db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             await update.message.reply_text("Use /start first.")
             return
         user.balance += 10
-        session.commit()
+        db.commit()
         await update.message.reply_text(f"✅ You mined 10 coins!\nNew balance: {user.balance}")
     except Exception as e:
         logger.exception("Mine error")
         await update.message.reply_text("An error occurred.")
+    finally:
+        db.close()
 
 async def balance(update, context):
     user_id = str(update.message.from_user.id)
+    db = SessionLocal()
     try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
+        user = db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             await update.message.reply_text("Use /start first.")
             return
@@ -103,59 +112,46 @@ async def balance(update, context):
     except Exception as e:
         logger.exception("Balance error")
         await update.message.reply_text("Could not fetch balance.")
+    finally:
+        db.close()
 
 async def spin(update, context):
     user_id = str(update.message.from_user.id)
+    db = SessionLocal()
     try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
+        user = db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             await update.message.reply_text("Use /start first.")
             return
         win = random.randint(1, 10)
         user.balance += win
-        session.commit()
+        db.commit()
         await update.message.reply_text(f"🎰 Spin result: {win}\nNew balance: {user.balance}")
     except Exception as e:
         logger.exception("Spin error")
         await update.message.reply_text("Could not spin.")
+    finally:
+        db.close()
 
 async def quest(update, context):
     user_id = str(update.message.from_user.id)
+    db = SessionLocal()
     try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
+        user = db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             await update.message.reply_text("Use /start first.")
             return
         reward = random.randint(5, 15)
         user.balance += reward
-        session.commit()
+        db.commit()
         await update.message.reply_text(f"🎯 Quest complete!\nEarned: {reward}\nBalance: {user.balance}")
     except Exception as e:
         logger.exception("Quest error")
         await update.message.reply_text("Error during quest.")
+    finally:
+        db.close()
 
-# === Mini-App API Endpoints ===
-@app.get("/")
-@app.head("/")
-def health():
-    return {"message": "CryptoMinerBot is running"}
-
-@app.get("/api/user/{telegram_id}")
-def get_user(telegram_id: str):
-    user = session.query(User).filter_by(telegram_id=telegram_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"balance": user.balance, "wallet_address": user.wallet_address}
-
-@app.get("/api/mine/{telegram_id}")
-def api_mine(telegram_id: str):
-    user = session.query(User).filter_by(telegram_id=telegram_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user.balance += 10
-    session.commit()
-    return {"balance": user.balance}
-
+# === API Models ===
 class WalletLinkRequest(BaseModel):
     telegram_id: str
     wallet_address: str
@@ -166,67 +162,109 @@ class WalletLinkRequest(BaseModel):
             raise ValueError("Must not be empty")
         return v
 
+# === API Routes ===
+@app.get("/")
+@app.head("/")
+def health():
+    return {"message": "CryptoMinerBot is running"}
+
+@app.get("/api/user/{telegram_id}")
+def get_user(telegram_id: str):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(telegram_id=telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"balance": user.balance, "wallet_address": user.wallet_address}
+    finally:
+        db.close()
+
+@app.get("/api/mine/{telegram_id}")
+def api_mine(telegram_id: str):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(telegram_id=telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user.balance += 10
+        db.commit()
+        return {"balance": user.balance}
+    finally:
+        db.close()
+
 @app.post("/register")
 def register_user(data: WalletLinkRequest):
+    db = SessionLocal()
     try:
-        user = session.query(User).filter_by(telegram_id=data.telegram_id).first()
+        user = db.query(User).filter_by(telegram_id=data.telegram_id).first()
         if not user:
             user = User(telegram_id=data.telegram_id, balance=0)
-            session.add(user)
-            session.commit()
+            db.add(user)
+            db.commit()
             return {"message": "✅ User registered", "telegram_id": data.telegram_id, "balance": user.balance}
         else:
             return {"message": "ℹ️ User already registered", "telegram_id": user.telegram_id, "balance": user.balance}
     except Exception as e:
         logger.exception("Register error")
         raise HTTPException(status_code=500, detail="Registration failed")
+    finally:
+        db.close()
 
 @app.post("/link-wallet")
 def link_wallet(data: WalletLinkRequest):
+    db = SessionLocal()
     try:
-        user = session.query(User).filter_by(telegram_id=data.telegram_id).first()
+        user = db.query(User).filter_by(telegram_id=data.telegram_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         user.wallet_address = data.wallet_address
-        session.commit()
+        db.commit()
         return {"message": "✅ Wallet linked successfully", "wallet_address": user.wallet_address}
     except Exception as e:
         logger.exception("Link wallet error")
         raise HTTPException(status_code=500, detail="Internal error")
+    finally:
+        db.close()
 
-# === NEW: Query Param Versions ===
 @app.post("/api/register")
 def register_user_q(telegram_id: str):
+    db = SessionLocal()
     try:
-        user = session.query(User).filter_by(telegram_id=telegram_id).first()
+        user = db.query(User).filter_by(telegram_id=telegram_id).first()
         if not user:
             user = User(telegram_id=telegram_id, balance=0)
-            session.add(user)
-            session.commit()
+            db.add(user)
+            db.commit()
             return {"message": "✅ User registered", "telegram_id": telegram_id, "balance": user.balance}
         else:
             return {"message": "ℹ️ User already registered", "telegram_id": user.telegram_id, "balance": user.balance}
     except Exception as e:
         logger.exception("Query-based register error")
         raise HTTPException(status_code=500, detail="Registration failed")
+    finally:
+        db.close()
 
 @app.post("/api/link-wallet")
 def link_wallet_q(telegram_id: str, wallet_address: str):
+    db = SessionLocal()
     try:
-        user = session.query(User).filter_by(telegram_id=telegram_id).first()
+        user = db.query(User).filter_by(telegram_id=telegram_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         user.wallet_address = wallet_address
-        session.commit()
+        db.commit()
         return {"message": "✅ Wallet linked", "wallet_address": wallet_address}
     except Exception as e:
         logger.exception("Query-based link wallet error")
         raise HTTPException(status_code=500, detail="Wallet link failed")
+    finally:
+        db.close()
 
 @app.get("/miniapp")
 def miniapp():
     return HTMLResponse("<h1>✅ CryptoMinerBot MiniApp Connected</h1>")
 
+# === Run Telegram Bot ===
 if telegram_app:
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("register", register))
@@ -244,6 +282,7 @@ if telegram_app:
 else:
     logger.warning("Telegram bot not started.")
 
+# === Run Server ===
 if __name__ == "__main__":
     logger.info("Starting server on http://0.0.0.0:10000")
     uvicorn.run(app, host="0.0.0.0", port=10000)
