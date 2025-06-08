@@ -1,6 +1,6 @@
 # main.py
-import os, logging, random, threading, datetime
-from fastapi import FastAPI, HTTPException, Depends, Request
+import os, logging, random, datetime, asyncio
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import Column, Integer, String, Float, DateTime, create_engine
@@ -38,13 +38,7 @@ Base.metadata.create_all(bind=engine)
 
 # === Telegram Setup ===
 token = os.getenv("TELEGRAM_TOKEN")
-telegram_app = None
-
-if token:
-    telegram_app = Application.builder().token(token).build()
-    logger.info("✅ Telegram bot initialized")
-else:
-    logger.warning("❌ TELEGRAM_TOKEN not set")
+telegram_app = Application.builder().token(token).build() if token else None
 
 # === Telegram Handlers ===
 async def start(update, context):
@@ -59,8 +53,8 @@ async def start(update, context):
             db.add(user)
             db.commit()
         keyboard = [[InlineKeyboardButton("💼 Open Dashboard", web_app={"url": "https://cryptominer-ui-two.vercel.app"})]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("👋 Welcome to CryptoMiner!", reply_markup=reply_markup)
+        markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("👋 Welcome to CryptoMiner!", reply_markup=markup)
     except Exception as e:
         logger.exception("Start error")
         await update.message.reply_text("⚠️ Something went wrong.")
@@ -226,7 +220,7 @@ def api_balance(telegram_id: str):
         return {
             "balance": user.balance,
             "referral_code": user.referral_code,
-            "referrals": 0  # Future: calculate referrals
+            "referrals": 0
         }
     finally:
         db.close()
@@ -235,21 +229,28 @@ def api_balance(telegram_id: str):
 def root():
     return {"message": "✅ CryptoMiner API working"}
 
-# === Telegram Handlers Activation ===
-if telegram_app:
-    telegram_app.add_handler(CommandHandler("start", start))
-    telegram_app.add_handler(CommandHandler("register", register))
-    telegram_app.add_handler(CommandHandler("mine", mine))
-    telegram_app.add_handler(CommandHandler("spin", spin))
-    telegram_app.add_handler(CommandHandler("balance", balance))
-
-    def run_bot():
-        import asyncio
-        asyncio.set_event_loop(asyncio.new_event_loop())
-        telegram_app.run_polling()
-
-    threading.Thread(target=run_bot, daemon=True).start()
-
+# === Launch ===
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=10000)
+
+    async def start_bot_and_api():
+        telegram_app.add_handler(CommandHandler("start", start))
+        telegram_app.add_handler(CommandHandler("register", register))
+        telegram_app.add_handler(CommandHandler("mine", mine))
+        telegram_app.add_handler(CommandHandler("spin", spin))
+        telegram_app.add_handler(CommandHandler("balance", balance))
+        await telegram_app.initialize()
+        await telegram_app.start()
+        logger.info("✅ Telegram bot polling started")
+
+    async def main():
+        bot_task = asyncio.create_task(start_bot_and_api())
+        config = uvicorn.Config(app=app, host="0.0.0.0", port=10000, log_level="info")
+        server = uvicorn.Server(config)
+        await server.serve()
+        await bot_task
+
+    if telegram_app:
+        asyncio.run(main())
+    else:
+        uvicorn.run(app, host="0.0.0.0", port=10000)
