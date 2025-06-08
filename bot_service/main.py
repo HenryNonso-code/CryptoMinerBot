@@ -194,6 +194,35 @@ def link_wallet(data: WalletLinkRequest):
         logger.exception("Link wallet error")
         raise HTTPException(status_code=500, detail="Internal error")
 
+# === NEW: Query Param Versions ===
+@app.post("/api/register")
+def register_user_q(telegram_id: str):
+    try:
+        user = session.query(User).filter_by(telegram_id=telegram_id).first()
+        if not user:
+            user = User(telegram_id=telegram_id, balance=0)
+            session.add(user)
+            session.commit()
+            return {"message": "✅ User registered", "telegram_id": telegram_id, "balance": user.balance}
+        else:
+            return {"message": "ℹ️ User already registered", "telegram_id": user.telegram_id, "balance": user.balance}
+    except Exception as e:
+        logger.exception("Query-based register error")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@app.post("/api/link-wallet")
+def link_wallet_q(telegram_id: str, wallet_address: str):
+    try:
+        user = session.query(User).filter_by(telegram_id=telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user.wallet_address = wallet_address
+        session.commit()
+        return {"message": "✅ Wallet linked", "wallet_address": wallet_address}
+    except Exception as e:
+        logger.exception("Query-based link wallet error")
+        raise HTTPException(status_code=500, detail="Wallet link failed")
+
 @app.get("/miniapp")
 def miniapp():
     return HTMLResponse("<h1>✅ CryptoMinerBot MiniApp Connected</h1>")
