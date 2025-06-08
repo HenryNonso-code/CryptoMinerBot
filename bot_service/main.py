@@ -214,11 +214,15 @@ def register_user(data: WalletLinkRequest):
 def link_wallet(data: WalletLinkRequest):
     db = SessionLocal()
     try:
+        logger.info(f"Received wallet link request for telegram_id={data.telegram_id}")
         user = db.query(User).filter_by(telegram_id=data.telegram_id).first()
         if not user:
+            logger.warning(f"No user found for telegram_id={data.telegram_id}")
             raise HTTPException(status_code=404, detail="User not found")
+
         user.wallet_address = data.wallet_address
         db.commit()
+        logger.info(f"Wallet linked successfully for {data.telegram_id}")
         return {"message": "✅ Wallet linked successfully", "wallet_address": user.wallet_address}
     except Exception as e:
         logger.exception("Link wallet error")
