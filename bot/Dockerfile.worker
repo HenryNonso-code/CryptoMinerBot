@@ -1,15 +1,21 @@
-# bot/Dockerfile.worker
+# Dockerfile.worker
 
+# Use slim Python 3.11 base image
 FROM python:3.11-slim
 
+# Set working directory inside the container
 WORKDIR /app
 
-# Install dependencies
+# Copy only requirements first and install
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the bot logic
-COPY bot/bot.py .
+# Copy bot source
+COPY bot/bot.py bot.py
 
-# Run the bot
+# Set environment variable for backend API (optional if you need it)
+ENV BACKEND_URL=https://cryptominerbot-1.onrender.com
+
+# Command to run the Telegram bot
 CMD ["python", "bot.py"]
