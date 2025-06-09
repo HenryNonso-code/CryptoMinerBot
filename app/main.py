@@ -231,26 +231,19 @@ def root():
 
 # === Launch ===
 if __name__ == "__main__":
-    import uvicorn
+    import threading
 
-    async def start_bot_and_api():
+    def run_bot():
         telegram_app.add_handler(CommandHandler("start", start))
         telegram_app.add_handler(CommandHandler("register", register))
         telegram_app.add_handler(CommandHandler("mine", mine))
         telegram_app.add_handler(CommandHandler("spin", spin))
         telegram_app.add_handler(CommandHandler("balance", balance))
-        await telegram_app.initialize()
-        await telegram_app.start()
-        logger.info("✅ Telegram bot polling started")
-
-    async def main():
-        bot_task = asyncio.create_task(start_bot_and_api())
-        config = uvicorn.Config(app=app, host="0.0.0.0", port=10000, log_level="info")
-        server = uvicorn.Server(config)
-        await server.serve()
-        await bot_task
+        telegram_app.run_polling()
 
     if telegram_app:
-        asyncio.run(main())
-    else:
-        uvicorn.run(app, host="0.0.0.0", port=10000)
+        threading.Thread(target=run_bot, daemon=True).start()
+
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=10000)
+
