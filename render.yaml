@@ -11,3 +11,13 @@ services:
         value: 10000
       - key: TELEGRAM_TOKEN
         sync: true
+
+  - type: worker
+    name: CryptoMinerBot-Worker
+    env: docker
+    rootDir: bot
+    dockerfilePath: Dockerfile.worker
+    plan: free
+    envVars:
+      - key: TELEGRAM_TOKEN
+        sync: true
