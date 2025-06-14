@@ -3,4 +3,4 @@ uvicorn==0.29.0
 sqlalchemy==2.0.25
 pydantic==2.7.1
 python-telegram-bot==20.7
-requests
+requests==2.31.0

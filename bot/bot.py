@@ -9,8 +9,12 @@ from telegram.ext import (
     filters
 )
 
+# === Configuration ===
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 API_URL = os.environ.get("BACKEND_URL", "https://cryptominerbot-1.onrender.com")
+
+
+# === Handlers ===
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.effective_user.first_name or "Miner"
@@ -32,10 +36,92 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, reply_markup=reply_markup)
 
-# Other handlers remain the same...
-# (register, mine, spin, quest, balance, refer)
 
-# Entrypoint
+async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    username = update.effective_user.username or "Miner"
+    referral_code = context.args[0] if context.args else None
+    try:
+        response = requests.post(f"{API_URL}/register", json={
+            "telegram_id": telegram_id,
+            "username": username,
+            "referral_code": referral_code
+        })
+        data = response.json()
+        await update.message.reply_text(
+            f"✅ {data.get('message')}\n🆔 ID: {telegram_id}\n🔗 Referral Code: {data.get('referral_code')}\n💰 Balance: {data.get('balance')}"
+        )
+    except Exception as e:
+        print("❌ Register error:", e)
+        await update.message.reply_text("⚠️ Registration failed. Try again.")
+
+
+async def mine(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    try:
+        response = requests.post(f"{API_URL}/mine", params={"telegram_id": telegram_id})
+        data = response.json()
+        await update.message.reply_text(data.get("message"))
+    except Exception as e:
+        print("❌ Mine error:", e)
+        await update.message.reply_text("⚠️ Mining failed. Try again later.")
+
+
+async def spin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    try:
+        response = requests.post(f"{API_URL}/spin", params={"telegram_id": telegram_id})
+        data = response.json()
+        await update.message.reply_text(data.get("message"))
+    except Exception as e:
+        print("❌ Spin error:", e)
+        await update.message.reply_text("⚠️ Could not spin right now.")
+
+
+async def quest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    try:
+        response = requests.post(f"{API_URL}/quest", params={"telegram_id": telegram_id})
+        data = response.json()
+        await update.message.reply_text(data.get("message"))
+    except Exception as e:
+        print("❌ Quest error:", e)
+        await update.message.reply_text("⚠️ Quest failed. Try again later.")
+
+
+async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    try:
+        response = requests.get(f"{API_URL}/balance", params={"telegram_id": telegram_id})
+        data = response.json()
+        await update.message.reply_text(f"🏦 Balance: {data.get('balance', 0)} coins")
+    except Exception as e:
+        print("❌ Balance error:", e)
+        await update.message.reply_text("⚠️ Could not fetch balance.")
+
+
+async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = str(update.effective_user.id)
+    try:
+        response = requests.get(f"{API_URL}/balance", params={"telegram_id": telegram_id})
+        data = response.json()
+        code = data.get("referral_code")
+        if code:
+            bot_username = context.bot.username
+            referral_link = f"https://t.me/{bot_username}?start={code}"
+            await update.message.reply_text(f"📣 Invite your friends:\n🔗 {referral_link}")
+        else:
+            await update.message.reply_text("❌ No referral code available.")
+    except Exception as e:
+        print("❌ Refer error:", e)
+        await update.message.reply_text("⚠️ Could not fetch referral code.")
+
+
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"🟢 Message: {update.message.text}")
+
+
+# === Entrypoint ===
 if __name__ == "__main__":
     if not BOT_TOKEN:
         raise ValueError("❌ BOT_TOKEN environment variable is missing")
@@ -51,5 +137,5 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("refer", refer))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
-    print("✅ Telegram bot is running...")  # 🔥 This must show up in Render logs
+    print("✅ Telegram bot is running...")
     app.run_polling()
