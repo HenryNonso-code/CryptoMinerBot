@@ -1,14 +1,12 @@
-# Dockerfile.worker
-
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy all files including bot and requirements
-COPY . .
-
-# Install Python dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Command to start the Telegram bot
-CMD ["python", "bot/bot.py"]
+COPY bot/bot.py bot.py
+
+ENV BACKEND_URL=https://cryptominerbot-1.onrender.com
+
+CMD ["python", "bot.py"]

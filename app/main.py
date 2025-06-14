@@ -1,6 +1,7 @@
 # main.py
 import os, logging, random, datetime, asyncio
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import Column, Integer, String, Float, DateTime, create_engine
@@ -14,6 +15,15 @@ logger = logging.getLogger(__name__)
 
 # === FastAPI App ===
 app = FastAPI()
+
+# === CORS Middleware ===
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://cryptominer-ui-two.vercel.app"],  # allow frontend access
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # === DB Setup ===
 Base = declarative_base()
@@ -232,7 +242,6 @@ def root():
 # === Launch ===
 if __name__ == "__main__":
     import threading
-
     def run_bot():
         telegram_app.add_handler(CommandHandler("start", start))
         telegram_app.add_handler(CommandHandler("register", register))
@@ -246,4 +255,3 @@ if __name__ == "__main__":
 
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=10000)
-
