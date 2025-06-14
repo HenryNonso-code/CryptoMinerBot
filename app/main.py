@@ -63,14 +63,14 @@ async def start(update, context):
             db.commit()
 
         keyboard = [[
-            InlineKeyboardButton("💼 Open Dashboard", web_app=WebAppInfo(url="https://cryptominer-2fropgxp9-johec-teams-projects.vercel.app"))
+            InlineKeyboardButton("\U0001F4BC Open Dashboard", web_app=WebAppInfo(url="https://cryptominer-2fropgxp9-johec-teams-projects.vercel.app"))
         ]]
 
         markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("👋 Welcome to CryptoMiner!", reply_markup=markup)
+        await update.message.reply_text("\U0001F44B Welcome to CryptoMiner!", reply_markup=markup)
     except Exception as e:
         logger.exception("Start error")
-        await update.message.reply_text("⚠️ Something went wrong.")
+        await update.message.reply_text("\u26A0\uFE0F Something went wrong.")
     finally:
         db.close()
 
@@ -86,9 +86,9 @@ async def register(update, context):
             user = User(telegram_id=user_id, username=username, balance=0, referral_code=referral_code, referred_by=referral_by)
             db.add(user)
             db.commit()
-            await update.message.reply_text(f"✅ Registered!\nReferral code: {referral_code}")
+            await update.message.reply_text(f"\u2705 Registered!\nReferral code: {referral_code}")
         else:
-            await update.message.reply_text("ℹ️ You're already registered.")
+            await update.message.reply_text("\u2139\uFE0F You're already registered.")
     finally:
         db.close()
 
@@ -98,17 +98,17 @@ async def mine(update, context):
     try:
         user = db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            await update.message.reply_text("❌ You must /register first.")
+            await update.message.reply_text("\u274C You must /register first.")
             return
         now = datetime.datetime.utcnow()
         if user.last_mined and (now - user.last_mined).total_seconds() < 60:
-            await update.message.reply_text("⏳ Cooldown: Wait 60 seconds between mining.")
+            await update.message.reply_text("\u23F3 Cooldown: Wait 60 seconds between mining.")
             return
         reward = random.randint(1, 10)
         user.balance += reward
         user.last_mined = now
         db.commit()
-        await update.message.reply_text(f"⛏️ You mined {reward} coins.\n💰 Balance: {user.balance:.2f}")
+        await update.message.reply_text(f"\u26CF\uFE0F You mined {reward} coins.\n\U0001F4B0 Balance: {user.balance:.2f}")
     finally:
         db.close()
 
@@ -118,18 +118,18 @@ async def spin(update, context):
     try:
         user = db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            await update.message.reply_text("❌ Please /register first.")
+            await update.message.reply_text("\u274C Please /register first.")
             return
         now = datetime.datetime.utcnow()
         if user.last_spun and (now - user.last_spun).total_seconds() < 60:
-            await update.message.reply_text("⏳ Cooldown: Wait 60 seconds between spins.")
+            await update.message.reply_text("\u23F3 Cooldown: Wait 60 seconds between spins.")
             return
         reward = random.randint(0, 15)
         user.balance += reward
         user.last_spun = now
         user.last_spin_reward = reward
         db.commit()
-        await update.message.reply_text(f"🎰 You spun and won {reward} coins!\n💰 Balance: {user.balance:.2f}")
+        await update.message.reply_text(f"\U0001F3B0 You spun and won {reward} coins!\n\U0001F4B0 Balance: {user.balance:.2f}")
     finally:
         db.close()
 
@@ -139,9 +139,9 @@ async def balance(update, context):
     try:
         user = db.query(User).filter_by(telegram_id=user_id).first()
         if user:
-            await update.message.reply_text(f"💰 Your balance: {user.balance:.2f} coins")
+            await update.message.reply_text(f"\U0001F4B0 Your balance: {user.balance:.2f} coins")
         else:
-            await update.message.reply_text("❌ You're not registered. Use /register.")
+            await update.message.reply_text("\u274C You're not registered. Use /register.")
     finally:
         db.close()
 
@@ -261,7 +261,7 @@ def api_leaderboard(limit: int = 10):
 
 @app.get("/")
 def root():
-    return {"message": "✅ CryptoMiner API working"}
+    return {"message": "\u2705 CryptoMiner API working"}
 
 # === Launch ===
 if __name__ == "__main__":
