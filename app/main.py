@@ -19,7 +19,6 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[allow_origins=["https://cryptominer-2fropgxp9-johec-teams-projects.vercel.app"],
-],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,8 +61,10 @@ async def start(update, context):
             user = User(telegram_id=user_id, username=username, balance=0, referral_code=referral)
             db.add(user)
             db.commit()
-        keyboard = [[InlineKeyboardButton("💼 Open Dashboard", web_app={web_app={"url": "https://cryptominer-2fropgxp9-johec-teams-projects.vercel.app"}
-"})]]
+      keyboard = [[
+    InlineKeyboardButton("💼 Open Dashboard", web_app=WebAppInfo(url="https://cryptominer-2fropgxp9-johec-teams-projects.vercel.app"))
+]]
+
         markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text("👋 Welcome to CryptoMiner!", reply_markup=markup)
     except Exception as e:
