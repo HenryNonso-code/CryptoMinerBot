@@ -1,4 +1,3 @@
-# main.py
 import os, logging, random, datetime, asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,7 +18,8 @@ app = FastAPI()
 # === CORS Middleware ===
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://cryptominer-ui-two.vercel.app"],  # allow frontend access
+    allow_origins=[allow_origins=["https://cryptominer-2fropgxp9-johec-teams-projects.vercel.app"],
+],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,7 +62,8 @@ async def start(update, context):
             user = User(telegram_id=user_id, username=username, balance=0, referral_code=referral)
             db.add(user)
             db.commit()
-        keyboard = [[InlineKeyboardButton("💼 Open Dashboard", web_app={"url": "https://cryptominer-ui-two.vercel.app"})]]
+        keyboard = [[InlineKeyboardButton("💼 Open Dashboard", web_app={web_app={"url": "https://cryptominer-2fropgxp9-johec-teams-projects.vercel.app"}
+"})]]
         markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text("👋 Welcome to CryptoMiner!", reply_markup=markup)
     except Exception as e:
@@ -232,6 +233,27 @@ def api_balance(telegram_id: str):
             "referral_code": user.referral_code,
             "referrals": 0
         }
+    finally:
+        db.close()
+
+@app.get("/leaderboard")
+def api_leaderboard(limit: int = 10):
+    db = SessionLocal()
+    try:
+        users = (
+            db.query(User)
+            .order_by(User.balance.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "username": user.username,
+                "telegram_id": user.telegram_id,
+                "balance": round(user.balance, 2)
+            }
+            for user in users
+        ]
     finally:
         db.close()
 
