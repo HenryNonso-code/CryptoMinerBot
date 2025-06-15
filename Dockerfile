@@ -1,17 +1,12 @@
-# Use a minimal Python image
+# Root-level Dockerfile for CryptoMinerBot-1
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
-# Copy all files to the container
 COPY . .
 
-# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose FastAPI port
 EXPOSE 10000
 
-# Start the FastAPI + Telegram app from app/main.py
-CMD ["python", "app/main.py"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10000"]
