@@ -1,4 +1,3 @@
-
 import os, logging, random, datetime
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
@@ -90,6 +89,43 @@ async def mine(update, context):
     finally:
         db.close()
 
+async def spin(update, context):
+    user_id = str(update.message.from_user.id)
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            await update.message.reply_text("❌ You must /register first.")
+            return
+        now = datetime.datetime.utcnow()
+        if user.last_spun and (now - user.last_spun).total_seconds() < 60:
+            await update.message.reply_text("⏳ Cooldown: Wait 60 seconds between spins.")
+            return
+        reward = random.randint(0, 15)
+        user.balance += reward
+        user.last_spun = now
+        user.last_spin_reward = reward
+        db.commit()
+        await update.message.reply_text(f"🎰 You spun and won {reward} coins!\n💰 Balance: {user.balance:.2f}")
+    finally:
+        db.close()
+
+async def quest(update, context):
+    user_id = str(update.message.from_user.id)
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            await update.message.reply_text("❌ You must /register first.")
+            return
+        reward = random.randint(2, 12)
+        user.balance += reward
+        user.quests_completed = (user.quests_completed or "") + f",Q{random.randint(1,100)}"
+        db.commit()
+        await update.message.reply_text(f"🎯 Quest complete! You earned {reward} coins.\n💰 Balance: {user.balance:.2f}")
+    finally:
+        db.close()
+
 async def balance(update, context):
     user_id = str(update.message.from_user.id)
     db = SessionLocal()
@@ -107,6 +143,8 @@ def main():
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("register", register))
     telegram_app.add_handler(CommandHandler("mine", mine))
+    telegram_app.add_handler(CommandHandler("spin", spin))
+    telegram_app.add_handler(CommandHandler("quest", quest))
     telegram_app.add_handler(CommandHandler("balance", balance))
     telegram_app.run_polling()
 
