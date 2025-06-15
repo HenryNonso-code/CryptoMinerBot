@@ -1,29 +1,17 @@
 
 import os, logging, random, datetime, asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
 from sqlalchemy import Column, Integer, String, Float, DateTime, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from pydantic import BaseModel
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler
 
 # === Logging ===
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# === FastAPI App ===
-app = FastAPI()
-
-# === CORS Middleware ===
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://cryptominer-ui-two.vercel.app"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # === DB Setup ===
 Base = declarative_base()
@@ -142,8 +130,9 @@ async def balance(update, context):
     finally:
         db.close()
 
-@app.on_event("startup")
-async def startup_event():
+# === FastAPI lifespan ===
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     if telegram_app:
         telegram_app.add_handler(CommandHandler("start", start))
         telegram_app.add_handler(CommandHandler("register", register))
@@ -153,14 +142,28 @@ async def startup_event():
         await telegram_app.initialize()
         await telegram_app.start()
         await telegram_app.updater.start_polling()
-
-@app.on_event("shutdown")
-async def shutdown_event():
+    yield
     if telegram_app:
         await telegram_app.updater.stop()
         await telegram_app.stop()
         await telegram_app.shutdown()
 
+# === FastAPI App ===
+app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://cryptominer-ui-two.vercel.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# === RESTful API Endpoints ===
+class RegisterRequest(BaseModel):
+    telegram_id: str
+    username: str = "User"
+    referral_code: str | None = None
+
 @app.get("/")
 def root():
-    return {"message": "✅ CryptoMiner API is running"}
+    return {"message": "✅ CryptoMinerBot is live"}
