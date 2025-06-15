@@ -1,141 +1,114 @@
-import os
-import requests
-from telegram import Update, KeyboardButton, WebAppInfo, ReplyKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters
-)
 
-# === Configuration ===
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-API_URL = os.environ.get("BACKEND_URL", "https://cryptominerbot-1.onrender.com")
+import os, logging, random, datetime
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler
 
+# === Logging ===
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# === Handlers ===
+# === DB Setup ===
+Base = declarative_base()
+engine = create_engine("sqlite:///users.db", echo=False, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(bind=engine)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    name = update.effective_user.first_name or "Miner"
-    keyboard = [
-        [KeyboardButton("🚀 Open JOHEC App", web_app=WebAppInfo(url="https://cryptominer-ui-two.vercel.app"))]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    msg = (
-        f"👋 Hello {name}!\n\n"
-        "Welcome to JOHEC CryptoMinerBot.\n\n"
-        "💡 Use these commands:\n"
-        "/register - Register an account (use a referral code if you have one)\n"
-        "/mine - Mine coins ⛏️\n"
-        "/spin - Spin the wheel 🎰\n"
-        "/quest - Complete a quest 🎯\n"
-        "/balance - Check your balance 💰\n"
-        "/refer - Get your referral link 👥\n\n"
-        "👇 Or tap below to access the dashboard."
-    )
-    await update.message.reply_text(msg, reply_markup=reply_markup)
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    telegram_id = Column(String, unique=True)
+    username = Column(String)
+    balance = Column(Float, default=0)
+    referral_code = Column(String, unique=True)
+    referred_by = Column(String)
+    last_mined = Column(DateTime)
+    last_spun = Column(DateTime)
+    last_spin_reward = Column(Float, default=0)
+    quests_completed = Column(String, default="")
+    referral_points = Column(Integer, default=0)
 
+Base.metadata.create_all(bind=engine)
 
-async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = str(update.effective_user.id)
-    username = update.effective_user.username or "Miner"
-    referral_code = context.args[0] if context.args else None
+# === Bot Token ===
+token = os.getenv("TELEGRAM_TOKEN")
+telegram_app = Application.builder().token(token).build() if token else None
+
+# === Telegram Bot Handlers ===
+async def start(update, context):
+    user_id = str(update.message.from_user.id)
+    username = update.message.from_user.username or "User"
+    db = SessionLocal()
     try:
-        response = requests.post(f"{API_URL}/register", json={
-            "telegram_id": telegram_id,
-            "username": username,
-            "referral_code": referral_code
-        })
-        data = response.json()
-        await update.message.reply_text(
-            f"✅ {data.get('message')}\n🆔 ID: {telegram_id}\n🔗 Referral Code: {data.get('referral_code')}\n💰 Balance: {data.get('balance')}"
-        )
-    except Exception as e:
-        print("❌ Register error:", e)
-        await update.message.reply_text("⚠️ Registration failed. Try again.")
+        user = db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            referral = f"{user_id[-6:]}_{random.randint(1000,9999)}"
+            user = User(telegram_id=user_id, username=username, balance=0, referral_code=referral)
+            db.add(user)
+            db.commit()
+        keyboard = [[InlineKeyboardButton("💼 Open Dashboard", web_app={"url": "https://cryptominer-ui-two.vercel.app"})]]
+        markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("👋 Welcome to CryptoMiner!", reply_markup=markup)
+    finally:
+        db.close()
 
-
-async def mine(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = str(update.effective_user.id)
+async def register(update, context):
+    user_id = str(update.message.from_user.id)
+    username = update.message.from_user.username or "User"
+    referral_by = context.args[0] if context.args else None
+    db = SessionLocal()
     try:
-        response = requests.post(f"{API_URL}/mine", params={"telegram_id": telegram_id})
-        data = response.json()
-        await update.message.reply_text(data.get("message"))
-    except Exception as e:
-        print("❌ Mine error:", e)
-        await update.message.reply_text("⚠️ Mining failed. Try again later.")
-
-
-async def spin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = str(update.effective_user.id)
-    try:
-        response = requests.post(f"{API_URL}/spin", params={"telegram_id": telegram_id})
-        data = response.json()
-        await update.message.reply_text(data.get("message"))
-    except Exception as e:
-        print("❌ Spin error:", e)
-        await update.message.reply_text("⚠️ Could not spin right now.")
-
-
-async def quest(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = str(update.effective_user.id)
-    try:
-        response = requests.post(f"{API_URL}/quest", params={"telegram_id": telegram_id})
-        data = response.json()
-        await update.message.reply_text(data.get("message"))
-    except Exception as e:
-        print("❌ Quest error:", e)
-        await update.message.reply_text("⚠️ Quest failed. Try again later.")
-
-
-async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = str(update.effective_user.id)
-    try:
-        response = requests.get(f"{API_URL}/balance", params={"telegram_id": telegram_id})
-        data = response.json()
-        await update.message.reply_text(f"🏦 Balance: {data.get('balance', 0)} coins")
-    except Exception as e:
-        print("❌ Balance error:", e)
-        await update.message.reply_text("⚠️ Could not fetch balance.")
-
-
-async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = str(update.effective_user.id)
-    try:
-        response = requests.get(f"{API_URL}/balance", params={"telegram_id": telegram_id})
-        data = response.json()
-        code = data.get("referral_code")
-        if code:
-            bot_username = context.bot.username
-            referral_link = f"https://t.me/{bot_username}?start={code}"
-            await update.message.reply_text(f"📣 Invite your friends:\n🔗 {referral_link}")
+        user = db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            referral_code = f"{user_id[-6:]}_{random.randint(1000,9999)}"
+            user = User(telegram_id=user_id, username=username, balance=0, referral_code=referral_code, referred_by=referral_by)
+            db.add(user)
+            db.commit()
+            await update.message.reply_text(f"✅ Registered!\nReferral code: {referral_code}")
         else:
-            await update.message.reply_text("❌ No referral code available.")
-    except Exception as e:
-        print("❌ Refer error:", e)
-        await update.message.reply_text("⚠️ Could not fetch referral code.")
+            await update.message.reply_text("ℹ You're already registered.")
+    finally:
+        db.close()
 
+async def mine(update, context):
+    user_id = str(update.message.from_user.id)
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            await update.message.reply_text("❌ You must /register first.")
+            return
+        now = datetime.datetime.utcnow()
+        if user.last_mined and (now - user.last_mined).total_seconds() < 60:
+            await update.message.reply_text("⏳ Cooldown: Wait 60 seconds between mining.")
+            return
+        reward = random.randint(1, 10)
+        user.balance += reward
+        user.last_mined = now
+        db.commit()
+        await update.message.reply_text(f"⛏ You mined {reward} coins.\n💰 Balance: {user.balance:.2f}")
+    finally:
+        db.close()
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"🟢 Message: {update.message.text}")
+async def balance(update, context):
+    user_id = str(update.message.from_user.id)
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(telegram_id=user_id).first()
+        if user:
+            await update.message.reply_text(f"💰 Your balance: {user.balance:.2f} coins")
+        else:
+            await update.message.reply_text("❌ You're not registered. Use /register.")
+    finally:
+        db.close()
 
+# === Bot Runner ===
+def main():
+    telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("register", register))
+    telegram_app.add_handler(CommandHandler("mine", mine))
+    telegram_app.add_handler(CommandHandler("balance", balance))
+    telegram_app.run_polling()
 
-# === Entrypoint ===
 if __name__ == "__main__":
-    if not BOT_TOKEN:
-        raise ValueError("❌ BOT_TOKEN environment variable is missing")
-
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("register", register))
-    app.add_handler(CommandHandler("mine", mine))
-    app.add_handler(CommandHandler("spin", spin))
-    app.add_handler(CommandHandler("quest", quest))
-    app.add_handler(CommandHandler("balance", balance))
-    app.add_handler(CommandHandler("refer", refer))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
-
-    print("✅ Telegram bot is running...")
-    app.run_polling()
+    main()
