@@ -1,21 +1,14 @@
 
-import os, logging, random, datetime, asyncio
-from contextlib import asynccontextmanager
+import os, random, datetime
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import Column, Integer, String, Float, DateTime, create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from pydantic import BaseModel
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler
-
-# === Logging ===
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from sqlalchemy import Column, Integer, String, Float, DateTime, create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 # === DB Setup ===
 Base = declarative_base()
-engine = create_engine("sqlite:///users.db", echo=True, connect_args={"check_same_thread": False})
+engine = create_engine("sqlite:////data/users.db", echo=True, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 
 class User(Base):
@@ -34,131 +27,17 @@ class User(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# === Telegram Setup ===
-token = os.getenv("TELEGRAM_TOKEN")
-telegram_app = Application.builder().token(token).build() if token else None
-
-# === Telegram Handlers ===
-async def start(update, context):
-    user_id = str(update.message.from_user.id)
-    username = update.message.from_user.username or "User"
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            referral = f"{user_id[-6:]}_{random.randint(1000,9999)}"
-            user = User(telegram_id=user_id, username=username, balance=0, referral_code=referral)
-            db.add(user)
-            db.commit()
-        keyboard = [[InlineKeyboardButton("💼 Open Dashboard", web_app={"url": "https://cryptominer-ui-two.vercel.app"})]]
-        markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("👋 Welcome to CryptoMiner!", reply_markup=markup)
-    except Exception as e:
-        logger.exception("Start error")
-        await update.message.reply_text("⚠ Something went wrong.")
-    finally:
-        db.close()
-
-async def register(update, context):
-    user_id = str(update.message.from_user.id)
-    username = update.message.from_user.username or "User"
-    referral_by = context.args[0] if context.args else None
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            referral_code = f"{user_id[-6:]}_{random.randint(1000,9999)}"
-            user = User(telegram_id=user_id, username=username, balance=0, referral_code=referral_code, referred_by=referral_by)
-            db.add(user)
-            db.commit()
-            await update.message.reply_text(f"✅ Registered!\nReferral code: {referral_code}")
-        else:
-            await update.message.reply_text("ℹ You're already registered.")
-    finally:
-        db.close()
-
-async def mine(update, context):
-    user_id = str(update.message.from_user.id)
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            await update.message.reply_text("❌ You must /register first.")
-            return
-        now = datetime.datetime.utcnow()
-        if user.last_mined and (now - user.last_mined).total_seconds() < 60:
-            await update.message.reply_text("⏳ Cooldown: Wait 60 seconds between mining.")
-            return
-        reward = random.randint(1, 10)
-        user.balance += reward
-        user.last_mined = now
-        db.commit()
-        await update.message.reply_text(f"⛏ You mined {reward} coins.\n💰 Balance: {user.balance:.2f}")
-    finally:
-        db.close()
-
-async def spin(update, context):
-    user_id = str(update.message.from_user.id)
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            await update.message.reply_text("❌ Please /register first.")
-            return
-        now = datetime.datetime.utcnow()
-        if user.last_spun and (now - user.last_spun).total_seconds() < 60:
-            await update.message.reply_text("⏳ Cooldown: Wait 60 seconds between spins.")
-            return
-        reward = random.randint(0, 15)
-        user.balance += reward
-        user.last_spun = now
-        user.last_spin_reward = reward
-        db.commit()
-        await update.message.reply_text(f"🎰 You spun and won {reward} coins!\n💰 Balance: {user.balance:.2f}")
-    finally:
-        db.close()
-
-async def balance(update, context):
-    user_id = str(update.message.from_user.id)
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter_by(telegram_id=user_id).first()
-        if user:
-            await update.message.reply_text(f"💰 Your balance: {user.balance:.2f} coins")
-        else:
-            await update.message.reply_text("❌ You're not registered. Use /register.")
-    finally:
-        db.close()
-
-# === FastAPI lifespan ===
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    if telegram_app:
-        telegram_app.add_handler(CommandHandler("start", start))
-        telegram_app.add_handler(CommandHandler("register", register))
-        telegram_app.add_handler(CommandHandler("mine", mine))
-        telegram_app.add_handler(CommandHandler("spin", spin))
-        telegram_app.add_handler(CommandHandler("balance", balance))
-        await telegram_app.initialize()
-        await telegram_app.start()
-        await telegram_app.updater.start_polling()
-    yield
-    if telegram_app:
-        await telegram_app.updater.stop()
-        await telegram_app.stop()
-        await telegram_app.shutdown()
-
 # === FastAPI App ===
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://cryptominer-ui-two.vercel.app"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# === RESTful API Endpoints ===
+# === Models ===
 class RegisterRequest(BaseModel):
     telegram_id: str
     username: str = "User"
@@ -166,4 +45,87 @@ class RegisterRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return {"message": "✅ CryptoMinerBot is live"}
+    return {"message": "✅ CryptoMiner API is running"}
+
+@app.post("/register")
+def register_user(req: RegisterRequest):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(telegram_id=req.telegram_id).first()
+        if user:
+            return {"message": "Already registered", "balance": user.balance, "referral_code": user.referral_code}
+        new_code = f"{req.telegram_id[-6:]}_{random.randint(1000,9999)}"
+        user = User(
+            telegram_id=req.telegram_id,
+            username=req.username,
+            referral_code=new_code,
+            referred_by=req.referral_code
+        )
+        db.add(user)
+        db.commit()
+        return {"message": "Registered", "id": user.id, "balance": user.balance, "referral_code": new_code}
+    finally:
+        db.close()
+
+@app.post("/mine")
+def mine(telegram_id: str):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(telegram_id=telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not registered")
+        now = datetime.datetime.utcnow()
+        if user.last_mined and (now - user.last_mined).total_seconds() < 60:
+            return {"message": "Cooldown active"}
+        coins = random.randint(1, 10)
+        user.balance += coins
+        user.last_mined = now
+        db.commit()
+        return {"message": f"Mined {coins} coins", "coins": coins, "balance": user.balance}
+    finally:
+        db.close()
+
+@app.post("/spin")
+def spin(telegram_id: str):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(telegram_id=telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not registered")
+        now = datetime.datetime.utcnow()
+        if user.last_spun and (now - user.last_spun).total_seconds() < 60:
+            return {"message": "Cooldown active"}
+        coins = random.randint(0, 15)
+        user.balance += coins
+        user.last_spun = now
+        user.last_spin_reward = coins
+        db.commit()
+        return {"message": f"Spun and won {coins} coins", "amount": coins, "balance": user.balance}
+    finally:
+        db.close()
+
+@app.post("/quest")
+def quest(telegram_id: str):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(telegram_id=telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not registered")
+        reward = random.randint(2, 12)
+        user.balance += reward
+        user.quests_completed = (user.quests_completed or "") + f",Q{random.randint(1,100)}"
+        db.commit()
+        return {"message": "Quest complete", "amount": reward, "balance": user.balance}
+    finally:
+        db.close()
+
+@app.get("/balance")
+def balance(telegram_id: str):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(telegram_id=telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not registered")
+        return {"balance": user.balance, "referral_code": user.referral_code, "referrals": 0}
+    finally:
+        db.close()
