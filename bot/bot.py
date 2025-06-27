@@ -45,7 +45,7 @@ async def start(update, context):
             user = User(telegram_id=user_id, username=username, referral_code=referral)
             db.add(user)
             db.commit()
-        keyboard = [[InlineKeyboardButton("💼 Open Dashboard", web_app={"url": "https://cryptominer-i9oxgo5pm-johec-teams-projects.vercel.app"}
+        keyboard = [[InlineKeyboardButton("💼 Open Dashboard", web_app={"url": "https://cryptominer-i9oxgo5pm-johec-teams-projects.vercel.app"})]]
 
         await update.message.reply_text("👋 Welcome to CryptoMiner!", reply_markup=InlineKeyboardMarkup(keyboard))
     finally:
