@@ -1,7 +1,7 @@
 import os, logging, random, datetime
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy.orm import declarative_base, sessionmaker
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler
 
 # === Logging ===
@@ -33,7 +33,7 @@ Base.metadata.create_all(bind=engine)
 token = os.getenv("TELEGRAM_TOKEN")
 telegram_app = Application.builder().token(token).build() if token else None
 
-# === Telegram Bot Handlers ===
+# === Handlers ===
 async def start(update, context):
     user_id = str(update.message.from_user.id)
     username = update.message.from_user.username or "User"
@@ -41,13 +41,13 @@ async def start(update, context):
     try:
         user = db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            referral = f"{user_id[-6:]}_{random.randint(1000,9999)}"
-            user = User(telegram_id=user_id, username=username, balance=0, referral_code=referral)
+            referral = f"{user_id[-6:]}_{random.randint(1000, 9999)}"
+            user = User(telegram_id=user_id, username=username, referral_code=referral)
             db.add(user)
             db.commit()
-        keyboard = [[InlineKeyboardButton("💼 Open Dashboard", web_app={"url": "https://crypto-miner-bot-web.onrender.com"})]]
-        markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("👋 Welcome to CryptoMiner!", reply_markup=markup)
+        keyboard = [[InlineKeyboardButton("💼 Open Dashboard", web_app={"url": "https://cryptominer-2c5dkmlie-johec-teams-projects.vercel.app"})]]
+
+        await update.message.reply_text("👋 Welcome to CryptoMiner!", reply_markup=InlineKeyboardMarkup(keyboard))
     finally:
         db.close()
 
@@ -60,7 +60,7 @@ async def register(update, context):
         user = db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             referral_code = f"{user_id[-6:]}_{random.randint(1000,9999)}"
-            user = User(telegram_id=user_id, username=username, balance=0, referral_code=referral_code, referred_by=referral_by)
+            user = User(telegram_id=user_id, username=username, referral_code=referral_code, referred_by=referral_by)
             db.add(user)
             db.commit()
             await update.message.reply_text(f"✅ Registered!\nReferral code: {referral_code}")
@@ -138,7 +138,7 @@ async def balance(update, context):
     finally:
         db.close()
 
-# === Bot Runner ===
+# === Run Bot ===
 def main():
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("register", register))
